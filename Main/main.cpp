@@ -10,9 +10,9 @@
 const unsigned int width = 1200;
 const unsigned int height = 800;
 
-// Prototipos de inicialización local para mantener limpio el flujo
+// Prototipos de inicialización local
 GLFWwindow* inicializarVentana(unsigned int width, unsigned int height);
-void processInput(GLFWwindow* window, Camera& camera);
+void processInput(GLFWwindow* window, Camera& camera, float deltaTime);
 
 int main() {
     // 1. Inicialización limpia del entorno gráfico
@@ -23,9 +23,11 @@ int main() {
     Shader objectShader("default.vert", "default.frag");
     Shader skyboxShader("skybox.vert", "skybox.frag");
     Shader menuShader("menu.vert", "menu.frag");
-    Camera camera(width, height, glm::vec3(0.0f, 0.0f, 5.0f));
 
-    // Matriz de proyección ortogonal para 2D
+    // Spawnear la cámara en Y = 2.0f (por encima del límite de colisión de 0.1f)
+    Camera camera(width, height, glm::vec3(0.0f, 2.0f, 5.0f));
+
+    // Matriz de proyección ortogonal para 2D (Menús e Interfaz)
     glm::mat4 projection2D = glm::ortho(0.0f, (float)width, 0.0f, (float)height, -1.0f, 1.0f);
 
     // 3. Carga e inicialización de todos los recursos geométricos y texturas
@@ -33,11 +35,26 @@ int main() {
     TextureCall::inicializarTexturasYMenus();
     TextureCall::cargarLosSkyboxes();
 
+    // Variables para controlar la fluidez del movimiento (deltaTime)
+    float lastFrame = 0.0f;
+
     // =========================================================================
     // LOOP DE RENDERIZADO PRINCIPAL
     // =========================================================================
     while (!glfwWindowShouldClose(window)) {
-        processInput(window, camera);
+        float currentFrame = static_cast<float>(glfwGetTime());
+
+        // Escudo protector: Si acabamos de saltar del menú al juego, reseteamos para evitar el mega-salto de tiempo
+        if (currentFrame - lastFrame > 0.1f) {
+            lastFrame = currentFrame - 0.016f;
+        }
+
+        // Calcular el tiempo transcurrido frame a frame (deltaTime)
+        float deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+        // Procesar entradas de teclado/menús pasando el deltaTime calculado
+        processInput(window, camera, deltaTime);
 
         // Establecer el color de fondo dinámico dependiendo del estado
         TextureCall::establecerColorDeFondoClear();
@@ -101,15 +118,15 @@ GLFWwindow* inicializarVentana(unsigned int width, unsigned int height) {
     glViewport(0, 0, width, height);
     glEnable(GL_DEPTH_TEST);
 
-    // Habilitar mezcla para transparencias PNG
+    // Habilitar mezcla para transparencias PNG (Crucial para botones e interfaz)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     return window;
 }
 
-// Lógica de entradas del teclado y ratón adaptada a los nuevos estados globales
-void processInput(GLFWwindow* window, Camera& camera) {
+// Lógica de entradas mapeada directamente a la funcionalidad interna de Camera
+void processInput(GLFWwindow* window, Camera& camera, float deltaTime) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
@@ -117,7 +134,7 @@ void processInput(GLFWwindow* window, Camera& camera) {
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
             double mouseX, mouseY;
             glfwGetCursorPos(window, &mouseX, &mouseY);
-            mouseY = height - mouseY; // Invertir coordenadas del eje Y
+            mouseY = height - mouseY; // Invertir coordenadas del eje Y para OpenGL
 
             if (TextureCall::botonJugar().estaPresionado(mouseX, mouseY)) {
                 TextureCall::currentState() = JUEGO;
@@ -144,12 +161,24 @@ void processInput(GLFWwindow* window, Camera& camera) {
         }
     }
     else if (TextureCall::currentState() == JUEGO) {
-        camera.Inputs(window);
+        // 1. El mouse se procesa de forma nativa mediante la cámara
+        camera.ProcessMouse(window);
+
+        // 2. Control de movimiento WASD + Espacio/Control (Sincronizado con DeltaTime de forma limpia)
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.ProcessKeyboard(FORWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.ProcessKeyboard(BACKWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.ProcessKeyboard(LEFT, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.ProcessKeyboard(RIGHT, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) camera.ProcessKeyboard(UP, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) camera.ProcessKeyboard(DOWN, deltaTime);
+
+        // Cambios rápidos de iluminación desde el juego
         if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) { TextureCall::currentSkybox() = DIA; }
         if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) { TextureCall::currentSkybox() = TARDE; }
         if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) { TextureCall::currentSkybox() = NOCHE; }
     }
 
+    // Regresar al menú principal presionando la tecla M desde cualquier otro estado
     if (TextureCall::currentState() != MENU && glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS) {
         TextureCall::currentState() = MENU;
         glfwWaitEventsTimeout(0.2);
