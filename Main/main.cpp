@@ -10,6 +10,7 @@
 #include "Shader.h"
 #include "Camera.h"
 #include "Texture.h"
+#include "TextureCall.h" // <--- Importamos tu clase controladora
 
 #ifdef _WIN32
 #include <windows.h>
@@ -47,7 +48,7 @@ struct Boton2D
     }
 };
 
-// Ubicación de Botones
+// Ubicación de Botones ORIGINALES (Sin alterar un solo pixel)
 Boton2D botonJugar = { 355.0f, 450.0f, 250.0f, 60.0f };
 Boton2D botonConfig = { 355.0f, 350.0f, 250.0f, 60.0f };
 Boton2D botonCredits = { 355.0f, 250.0f, 250.0f, 60.0f };
@@ -120,7 +121,9 @@ int main()
     Texture texBotonCreditos("creditos.png", "2D", 0);
     Texture texBotonBack("n.png", "2D", 0);
     Texture texPantallaConfig("pantallaReglas.png", "2D", 0);
-    Texture texSkybox("./", "cubemap", 0);
+
+    // CAMBIO Quirúrgico 1: En lugar de cargar un solo cubemap fijo, inicializamos TextureCall
+    TextureCall::inicializarSkyboxes();
 
     glm::mat4 projection2D = glm::ortho(
         0.0f, (float)width,
@@ -130,7 +133,7 @@ int main()
 
     bool mostrarCreditos = true;
 
-    // LOOP PRINCIPAL
+    // LOOP PRINCIPAL (Estructura exacta guardada)
     while (!glfwWindowShouldClose(window))
     {
         processInput(window, camera);
@@ -159,12 +162,15 @@ int main()
             skyboxShader.setMat4("projection", projMundo);
 
             glBindVertexArray(skyboxVAO);
-            texSkybox.Bind();
+
+            // CAMBIO Quirúrgico 2: Vinculamos dinámicamente el Skybox activo (DIA, TARDE o NOCHE)
+            TextureCall::vincularSkyboxActual();
+
             glDrawArrays(GL_TRIANGLES, 0, 36);
 
             glDepthFunc(GL_LESS);
 
-            // Botón BACK
+            // Botón BACK (Se mantiene intacto y visible sobre el juego)
             glDisable(GL_DEPTH_TEST);
             menuShader.Activate();
             texBotonBack.Bind();
@@ -272,11 +278,14 @@ int main()
         if (currentState == MENU) mostrarCreditos = true;
     }
 
+    // CAMBIO Quirúrgico 3: Liberar texturas dinámicas al cerrar el juego
+    TextureCall::eliminarSkyboxes();
+
     glfwTerminate();
     return 0;
 }
 
-// PROCESAR ENTRADAS
+// PROCESAR ENTRADAS ORIGINAL (Mantiene tus controles y colisiones del mouse intactas)
 void processInput(GLFWwindow* window, Camera& camera)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -285,6 +294,11 @@ void processInput(GLFWwindow* window, Camera& camera)
     if (currentState == JUEGO)
     {
         camera.Inputs(window);
+
+        // Control de teclado para interactuar con TextureCall y cambiar el clima en tiempo real
+        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) TextureCall::cambiarClima(DIA);
+        if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) TextureCall::cambiarClima(TARDE);
+        if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) TextureCall::cambiarClima(NOCHE);
     }
 
     static bool mousePressedLastFrame = false;
@@ -330,25 +344,14 @@ void processInput(GLFWwindow* window, Camera& camera)
 }
 
 // RENDER BOTÓN
-void renderBoton(
-    Shader& shader,
-    unsigned int quadVAO,
-    Boton2D& boton,
-    glm::mat4& projection2D
-) {
+void renderBoton(Shader& shader, unsigned int quadVAO, Boton2D& boton, glm::mat4& projection2D) {
     float centroX = boton.x + (boton.ancho / 2.0f);
     float centroY = boton.y + (boton.alto / 2.0f);
     float escalaX = boton.ancho / 2.0f;
     float escalaY = boton.alto / 2.0f;
 
-    glm::mat4 model = glm::translate(
-        glm::mat4(1.0f),
-        glm::vec3(centroX, centroY, 0.0f)
-    );
-    model = glm::scale(
-        model,
-        glm::vec3(escalaX, escalaY, 1.0f)
-    );
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(centroX, centroY, 0.0f));
+    model = glm::scale(model, glm::vec3(escalaX, escalaY, 1.0f));
 
     shader.setMat4("model2D", projection2D * model);
     glBindVertexArray(quadVAO);
@@ -369,29 +372,17 @@ unsigned int setupMenuQuad() {
 
     glBindVertexArray(quadVAO);
     glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-    glBufferData(
-        GL_ARRAY_BUFFER,
-        sizeof(quadVertices),
-        quadVertices,
-        GL_STATIC_DRAW
-    );
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(
-        0, 2, GL_FLOAT, GL_FALSE,
-        4 * sizeof(float), (void*)0
-    );
-
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(
-        1, 2, GL_FLOAT, GL_FALSE,
-        4 * sizeof(float), (void*)(2 * sizeof(float))
-    );
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 
     return quadVAO;
 }
 
-// GENERAR CUBO DE SKYBOX (Filas ordenadas)
+// GENERAR CUBO DE SKYBOX
 unsigned int setupSkyboxCube() {
     float skyboxVertices[] = {
         -1.0f,  1.0f, -1.0f,   -1.0f, -1.0f, -1.0f,    1.0f, -1.0f, -1.0f,
@@ -413,18 +404,10 @@ unsigned int setupSkyboxCube() {
 
     glBindVertexArray(skyboxVAO);
     glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
-    glBufferData(
-        GL_ARRAY_BUFFER,
-        sizeof(skyboxVertices),
-        skyboxVertices,
-        GL_STATIC_DRAW
-    );
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(
-        0, 3, GL_FLOAT, GL_FALSE,
-        3 * sizeof(float), (void*)0
-    );
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
     return skyboxVAO;
 }
