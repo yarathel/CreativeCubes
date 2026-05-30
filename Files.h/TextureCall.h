@@ -1,39 +1,33 @@
-#pragma once
-
 #include <glad/glad.h>
 #include <stb_image.h>
-#include <glm.hpp>
-#include <gtc/matrix_transform.hpp>
-#include <gtc/type_ptr.hpp> // Añadido para glm::value_ptr en el Skybox
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp> // Añadido para glm::value_ptr en el Skybox
 #include <iostream>
+#pragma once
+#ifndef TEXTURE_CALL_H
+#define TEXTURE_CALL_H
+
+#include <stb/stb_image.h> // <--- CRUCIAL: Añadido para stbi_load y corregir errores
+
 #include <string>
 #include <vector>
 #include <cmath>
+#include <iostream>
 
 #include "Shader.h"
 #include "Texture.h"
-#include "Camera.h" // Añadido para el renderizado del Skybox con la cámara
+#include "Camera.h"
 
-// 1. Enumeraciones de Estado
-enum AppState { MENU, CONFIG, CREDITS, JUEGO };
+// NOTA: Quitamos AppState, SkyboxType y Boton2D de aquí porque YA existen en tu main.cpp
+// Solo dejamos las declaraciones que usará la estructura.
 enum SkyboxType { DIA, TARDE, NOCHE };
 
-// 2. Estructura del Botón
-struct Boton2D {
-    float x, y;
-    float ancho, alto;
-
-    bool estaPresionado(double mouseX, double mouseY) {
-        return (mouseX >= x && mouseX <= x + ancho && mouseY >= y && mouseY <= y + alto);
-    }
-};
-
-// 3. Contenedor del Sistema de Texturas (Header-Only puro sin 'inline')
 struct TextureCall {
 
-    // --- TRUCO C++: Funciones que devuelven una referencia a la variable ---
-    static AppState& currentState() {
-        static AppState state = MENU;
+    // --- Variables de Estado Internas ---
+    static int& currentState() {
+        static int state = 0; // Guardado como entero para evitar conflictos de enums
         return state;
     }
 
@@ -47,28 +41,13 @@ struct TextureCall {
         return textures;
     }
 
-    static Boton2D& botonJugar() {
-        static Boton2D boton = { 475.0f, 450.0f, 250.0f, 60.0f };
-        return boton;
-    }
-
-    static Boton2D& botonConfig() {
-        static Boton2D boton = { 475.0f, 350.0f, 250.0f, 60.0f };
-        return boton;
-    }
-
-    static Boton2D& botonCredits() {
-        static Boton2D boton = { 475.0f, 250.0f, 250.0f, 60.0f };
-        return boton;
-    }
-
     // Punteros para las texturas internas gestionados como variables estáticas locales
     static Texture*& texFondoMenu() { static Texture* t = nullptr; return t; }
     static Texture*& texBotonIniciar() { static Texture* t = nullptr; return t; }
     static Texture*& texBotonReglas() { static Texture* t = nullptr; return t; }
     static Texture*& texBotonCreditos() { static Texture* t = nullptr; return t; }
 
-    // --- VARIABLES DE GEOMETRÍA Y CONFIGURACIÓN INTEGRADAS ---
+    // VARIABLES DE GEOMETRÍA INTEGRADAS
     static unsigned int& menuQuadVAO() { static unsigned int vao = 0; return vao; }
     static unsigned int& menuQuadVBO() { static unsigned int vbo = 0; return vbo; }
     static unsigned int& skyboxVAO() { static unsigned int vao = 0; return vao; }
@@ -80,7 +59,6 @@ struct TextureCall {
     }
 
     static bool& modoOscuro() { static bool oscuro = true; return oscuro; }
-
 
     // --- FUNCIONES DE CARGA Y LOGICA ---
     static unsigned int loadCubemapFromHorizontalCross(const std::string& path) {
@@ -179,176 +157,27 @@ struct TextureCall {
         return textureID;
     }
 
-    static void inicializarTexturasYMenus() {
-        texFondoMenu() = new Texture("climasoleado.png", "2D", 0);
-        texBotonIniciar() = new Texture("buttoninicio.png", "2D", 0);
-        texBotonReglas() = new Texture("regla.png", "2D", 0);
-        texBotonCreditos() = new Texture("creditos.png", "2D", 0);
+    // Inicializa texturas del mapa
+    static void inicializarSkyboxes() {
+        cubemapTextures()[DIA] = loadCubemapFromHorizontalCross("Cubemap_Sky_02-512x512.png");
+        cubemapTextures()[TARDE] = loadCubemapFromHorizontalCross("Cubemap_Sky_01-512x512.png");
+        cubemapTextures()[NOCHE] = loadCubemapFromHorizontalCross("Cubemap_Sky_15-512x512.png");
     }
 
-    static void cargarLosSkyboxes() {
-        cubemapTextures()[DIA] = loadCubemapFromHorizontalCross("TEXTURAS/cubemap/Cubemap_Sky_02-512x512.png");
-        cubemapTextures()[TARDE] = loadCubemapFromHorizontalCross("TEXTURAS/cubemap/Cubemap_Sky_01-512x512.png");
-        cubemapTextures()[NOCHE] = loadCubemapFromHorizontalCross("TEXTURAS/cubemap/Cubemap_Sky_15-512x512.png");
+    // Vincula el cubemap activo para que sea dibujado por tu main
+    static void vincularSkyboxActual() {
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTextures()[currentSkybox()]);
     }
 
-    // Genera buffers geométricos del menú 2D y del Skybox 3D
-    static void inicializarGeometriaYMenus() {
-        // --- Quad 2D para interfaz ---
-        float quadVertices[] = {
-            -1.0f,  1.0f,   0.0f, 1.0f,
-            -1.0f, -1.0f,   0.0f, 0.0f,
-             1.0f,  1.0f,   1.0f, 1.0f,
-             1.0f, -1.0f,   1.0f, 0.0f,
-        };
-        glGenVertexArrays(1, &menuQuadVAO());
-        glGenBuffers(1, &menuQuadVBO());
-        glBindVertexArray(menuQuadVAO());
-        glBindBuffer(GL_ARRAY_BUFFER, menuQuadVBO());
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-
-        // --- Cubo 3D para Skybox ---
-        float skyboxVertices[] = {
-            -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
-             1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
-            -1.0f, -1.0f,  1.0f,  -1.0f, -1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
-            -1.0f,  1.0f, -1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
-             1.0f, -1.0f, -1.0f,   1.0f, -1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
-             1.0f,  1.0f,  1.0f,   1.0f,  1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
-            -1.0f, -1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
-             1.0f,  1.0f,  1.0f,   1.0f, -1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
-            -1.0f,  1.0f, -1.0f,   1.0f,  1.0f, -1.0f,   1.0f,  1.0f,  1.0f,
-             1.0f,  1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f,  1.0f, -1.0f,
-            -1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f, -1.0f,
-             1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f
-        };
-        glGenVertexArrays(1, &skyboxVAO());
-        glGenBuffers(1, &skyboxVBO());
-        glBindVertexArray(skyboxVAO());
-        glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO());
-        glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-        glBindVertexArray(0);
+    // Cambia dinámicamente el clima actual
+    static void cambiarClima(SkyboxType tipo) {
+        currentSkybox() = tipo;
     }
 
-    // Intercambiar color claro/oscuro del fondo 3D
-    static void conmutarModoOscuro() {
-        modoOscuro() = !modoOscuro();
-        if (modoOscuro()) {
-            colorFondo3D()[0] = 0.1f; colorFondo3D()[1] = 0.14f; colorFondo3D()[2] = 0.18f;
-        }
-        else {
-            colorFondo3D()[0] = 0.4f; colorFondo3D()[1] = 0.55f; colorFondo3D()[2] = 0.7f;
-        }
-    }
-
-    // Gestiona el color dinámico de glClearColor
-    static void establecerColorDeFondoClear() {
-        if (currentState() == MENU)        glClearColor(0.15f, 0.15f, 0.25f, 1.0f);
-        else if (currentState() == CONFIG)  glClearColor(0.15f, 0.25f, 0.15f, 1.0f);
-        else if (currentState() == CREDITS) glClearColor(0.25f, 0.15f, 0.15f, 1.0f);
-        else if (currentState() == JUEGO)   glClearColor(colorFondo3D()[0], colorFondo3D()[1], colorFondo3D()[2], 1.0f);
-    }
-
-    static void liberarTexturasYMenus() {
-        if (texFondoMenu()) { texFondoMenu()->Delete(); delete texFondoMenu(); }
-        if (texBotonIniciar()) { texBotonIniciar()->Delete(); delete texBotonIniciar(); }
-        if (texBotonReglas()) { texBotonReglas()->Delete(); delete texBotonReglas(); }
-        if (texBotonCreditos()) { texBotonCreditos()->Delete(); delete texBotonCreditos(); }
+    // Elimina las texturas de la GPU de forma limpia
+    static void eliminarSkyboxes() {
         glDeleteTextures(3, cubemapTextures());
     }
-
-    // Centraliza la destrucción total al cerrar la app
-    static void liberarTodo() {
-        glDeleteVertexArrays(1, &menuQuadVAO());
-        glDeleteBuffers(1, &menuQuadVBO());
-        glDeleteVertexArrays(1, &skyboxVAO());
-        glDeleteBuffers(1, &skyboxVBO());
-        liberarTexturasYMenus();
-    }
-
-    static void dibujarBotonInterno(Shader& shader, unsigned int quadVAO, Boton2D& boton, const glm::mat4& projection2D) {
-        float centroX = boton.x + (boton.ancho / 2.0f);
-        float centroY = boton.y + (boton.alto / 2.0f);
-        float escalaX = boton.ancho / 2.0f;
-        float escalaY = boton.alto / 2.0f;
-
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(centroX, centroY, 0.0f));
-        model = glm::scale(model, glm::vec3(escalaX, escalaY, 1.0f));
-
-        shader.setMat4("model2D", projection2D * model);
-        glBindVertexArray(quadVAO);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    }
-
-    static void renderizarMenuPrincipal(Shader& menuShader, unsigned int menuQuadVAO, const glm::mat4& projection2D) {
-        glm::mat4 modelFondo = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(600.0f, 400.0f, 0.0f)), glm::vec3(600.0f, 400.0f, 1.0f));
-
-        if (texFondoMenu()) texFondoMenu()->Bind();
-        menuShader.setMat4("model2D", projection2D * modelFondo);
-        glBindVertexArray(menuQuadVAO);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-        if (texBotonIniciar()) texBotonIniciar()->Bind();
-        dibujarBotonInterno(menuShader, menuQuadVAO, botonJugar(), projection2D);
-
-        if (texBotonReglas()) texBotonReglas()->Bind();
-        dibujarBotonInterno(menuShader, menuQuadVAO, botonConfig(), projection2D);
-
-        if (texBotonCreditos()) texBotonCreditos()->Bind();
-        dibujarBotonInterno(menuShader, menuQuadVAO, botonCredits(), projection2D);
-    }
-
-    static void renderizarPantallaConfig(Shader& menuShader, unsigned int menuQuadVAO, const glm::mat4& projection2D) {
-        glm::mat4 modelFondo = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(600.0f, 400.0f, 0.0f)), glm::vec3(600.0f, 400.0f, 1.0f));
-        if (texFondoMenu()) texFondoMenu()->Bind();
-        menuShader.setMat4("model2D", projection2D * modelFondo);
-        glBindVertexArray(menuQuadVAO);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    }
-
-    static void renderizarPantallaCreditos(Shader& menuShader, unsigned int menuQuadVAO, const glm::mat4& projection2D) {
-        glm::mat4 modelFondo = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(600.0f, 400.0f, 0.0f)), glm::vec3(600.0f, 400.0f, 1.0f));
-        if (texFondoMenu()) texFondoMenu()->Bind();
-        menuShader.setMat4("model2D", projection2D * modelFondo);
-        glBindVertexArray(menuQuadVAO);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    }
-
-    // Distribuidor automático de pantallas 2D basado en el estado actual
-    static void renderizarEstadoActual2D(Shader& shader, const glm::mat4& projection2D) {
-        if (currentState() == MENU) {
-            renderizarMenuPrincipal(shader, menuQuadVAO(), projection2D);
-        }
-        else if (currentState() == CONFIG) {
-            renderizarPantallaConfig(shader, menuQuadVAO(), projection2D);
-        }
-        else if (currentState() == CREDITS) {
-            renderizarPantallaCreditos(shader, menuQuadVAO(), projection2D);
-        }
-    }
-
-    // Encapsula el dibujado matemático del Skybox en el entorno 3D
-    static void renderizarSkybox(Shader& skyboxShader, Camera& camera, float w, float h) {
-        glDepthFunc(GL_LEQUAL);
-        skyboxShader.Activate();
-
-        glm::mat4 view = glm::mat4(glm::mat3(glm::lookAt(camera.Position, camera.Position + camera.Orientation, camera.Up)));
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), w / h, 0.1f, 100.0f);
-
-        glUniformMatrix4fv(glGetUniformLocation(skyboxShader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(glGetUniformLocation(skyboxShader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-
-        glBindVertexArray(skyboxVAO());
-        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTextures()[currentSkybox()]);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-
-        glDepthFunc(GL_LESS);
-    }
 };
+
+#endif
