@@ -1,15 +1,21 @@
 #version 330 core
 out vec4 FragColor;
 
-in vec2 TexCoords;
+in vec2 TexCoord;
 
-// Mapeador de la textura cargada
-uniform sampler2D texture_diffuse1;
+uniform sampler2D texture_diffuse1; // Nota que en tu main pusiste texture_diffuse1
 
-void main() {
-    // Si usas una textura mapeada la pinta, si no, pinta color base blanco texturizado
-    vec4 texColor = texture(texture_diffuse1, TexCoords);
-    if(texColor.a < 0.1)
-        discard;
-    FragColor = texColor;
+void main()
+{
+    vec4 texColor = texture(texture_diffuse1, TexCoord);
+    
+    // Si la textura es completamente negra o transparente, forzamos un color llamativo (Verde o Azul)
+    if(texColor.rgb == vec3(0.0) || texColor.a < 0.1)
+    {
+        FragColor = vec4(0.0f, 0.8f, 0.3f, 1.0f); // Bloque verde para testear
+    }
+    else
+    {
+        FragColor = texColor;
+    }
 }
