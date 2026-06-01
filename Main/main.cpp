@@ -6,11 +6,13 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <iostream>
+#include <vector>
+#include <cmath>
 
-#include "Shader.h"
+#include "shaderClass.h"
 #include "Camera.h"
 #include "Texture.h"
-#include "TextureCall.h" // <--- Importamos tu clase controladora
+#include "TextureCall.h" // Controlador de climas
 
 #ifdef _WIN32
 #include <windows.h>
@@ -48,7 +50,7 @@ struct Boton2D
     }
 };
 
-// Ubicación de Botones ORIGINALES (Sin alterar un solo pixel)
+// Ubicación de Botones ORIGINALES
 Boton2D botonJugar = { 355.0f, 450.0f, 250.0f, 60.0f };
 Boton2D botonConfig = { 355.0f, 350.0f, 250.0f, 60.0f };
 Boton2D botonCredits = { 355.0f, 250.0f, 250.0f, 60.0f };
@@ -57,13 +59,12 @@ Boton2D botonBack = { 30.0f, 50.0f, 200.0f, 100.0f };
 // Prototipos
 unsigned int setupMenuQuad();
 unsigned int setupSkyboxCube();
+unsigned int setupObjetoCubo();
 void processInput(GLFWwindow* window, Camera& camera);
-void renderBoton(
-    Shader& shader,
-    unsigned int quadVAO,
-    Boton2D& boton,
-    glm::mat4& projection2D
-);
+void renderBoton(Shader& shader, unsigned int quadVAO, Boton2D& boton, glm::mat4& projection2D);
+
+// Vector dinámico global para almacenar los cubos colocados por el usuario
+std::vector<glm::vec3> posicionesCubos;
 
 // MAIN
 int main()
@@ -106,24 +107,33 @@ int main()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    // Inicialización de Shaders
     Shader menuShader("menu.vert", "menu.frag");
     Shader skyboxShader("skybox.vert", "skybox.frag");
+    Shader cubeShader("default.vert", "default.frag");
 
     // Instancia de cámara en el origen
-    Camera camera(width, height, glm::vec3(0.0f, 0.0f, 0.0f));
+    Camera camera(width, height, glm::vec3(0.0f, 1.8f, 5.0f));
 
+    // Configuración de VAOs
     unsigned int menuQuadVAO = setupMenuQuad();
     unsigned int skyboxVAO = setupSkyboxCube();
+    unsigned int cubeVAO = setupObjetoCubo();
 
+    // Carga de Texturas
     Texture texFondoMenu("climasoleado.png", "2D", 0);
     Texture texBotonIniciar("buttoninicio.png", "2D", 0);
     Texture texBotonReglas("regla.png", "2D", 0);
     Texture texBotonCreditos("creditos.png", "2D", 0);
-    Texture texBotonBack("n.png", "2D", 0);
+    Texture texBotonBack("Back.png", "2D", 0);
     Texture texPantallaConfig("pantallaReglas.png", "2D", 0);
+    Texture texPantallaCreditos("pantallaCreditos.png", "2D", 0);
+    Texture texCuboMundo("buttoninicio.png", "2D", 0);
 
-    // CAMBIO Quirúrgico 1: En lugar de cargar un solo cubemap fijo, inicializamos TextureCall
+    // Inicializamos Skyboxes del controlador climático
     TextureCall::inicializarSkyboxes();
+    cubeShader.Activate();
+    glUniform1i(glGetUniformLocation(cubeShader.ID, "texture_diffuse1"), 0);
 
     glm::mat4 projection2D = glm::ortho(
         0.0f, (float)width,
@@ -133,7 +143,7 @@ int main()
 
     bool mostrarCreditos = true;
 
-    // LOOP PRINCIPAL (Estructura exacta guardada)
+    // LOOP PRINCIPAL
     while (!glfwWindowShouldClose(window))
     {
         processInput(window, camera);
@@ -144,13 +154,13 @@ int main()
         // ==================================================
         if (currentState == JUEGO)
         {
+            // --- 1. RENDERIZADO DEL SKYBOX ---
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LEQUAL);
 
             skyboxShader.Activate();
 
             glm::mat4 viewSkybox = glm::mat4(glm::mat3(camera.GetViewMatrix()));
-
             glm::mat4 projMundo = glm::perspective(
                 glm::radians(45.0f),
                 (float)width / (float)height,
@@ -162,15 +172,32 @@ int main()
             skyboxShader.setMat4("projection", projMundo);
 
             glBindVertexArray(skyboxVAO);
-
-            // CAMBIO Quirúrgico 2: Vinculamos dinámicamente el Skybox activo (DIA, TARDE o NOCHE)
             TextureCall::vincularSkyboxActual();
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
-
             glDepthFunc(GL_LESS);
 
-            // Botón BACK (Se mantiene intacto y visible sobre el juego)
+            // --- 2. RENDERIZADO DE LOS CUBOS 3D ---
+            cubeShader.Activate();
+
+            glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 100.0f);
+            glm::mat4 view = camera.GetViewMatrix();
+            glm::mat4 camMatrix = projection * view;
+
+            cubeShader.setMat4("camMatrix", camMatrix);
+
+            glActiveTexture(GL_TEXTURE0);
+            texCuboMundo.Bind();
+            glBindVertexArray(cubeVAO);
+
+            for (size_t i = 0; i < posicionesCubos.size(); i++)
+            {
+                glm::mat4 modelCubo = glm::translate(glm::mat4(1.0f), posicionesCubos[i]);
+                cubeShader.setMat4("model", modelCubo);
+                glDrawArrays(GL_TRIANGLES, 0, 36);
+            }
+
+            // --- 3. BOTÓN BACK SOBRE EL JUEGO (2D) ---
             glDisable(GL_DEPTH_TEST);
             menuShader.Activate();
             texBotonBack.Bind();
@@ -178,7 +205,7 @@ int main()
             glEnable(GL_DEPTH_TEST);
         }
         // ==================================================
-        // INTERFACES INTERFACES 2D
+        // INTERFACES 2D
         // ==================================================
         else
         {
@@ -235,31 +262,38 @@ int main()
             }
             else if (currentState == CREDITS)
             {
-                texBotonCreditos.Bind();
+                texPantallaCreditos.Bind();
 
-                glm::mat4 panel = glm::translate(
+                glm::mat4 modelCredits = glm::translate(
                     glm::mat4(1.0f),
                     glm::vec3((float)width / 2.0f, (float)height / 2.0f, 0.0f)
                 );
-                panel = glm::scale(
-                    panel,
-                    glm::vec3(450.0f, 300.0f, 1.0f)
+                modelCredits = glm::scale(
+                    modelCredits,
+                    glm::vec3((float)width / 2.0f, (float)height / 2.0f, 1.0f)
                 );
 
-                menuShader.setMat4("model2D", projection2D * panel);
+                menuShader.setMat4("model2D", projection2D * modelCredits);
 
                 glBindVertexArray(menuQuadVAO);
                 glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
                 if (mostrarCreditos)
                 {
+#ifdef _WIN32
                     system("cls");
+#else
+                    system("clear");
+#endif
                     std::cout << "\n=====================================\n";
-                    std::cout << "          CREATIVE CUBES 3D\n";
+                    std::cout << "         CREATIVE CUBES 3D\n";
                     std::cout << "=====================================\n\n";
-                    std::cout << "Proyecto realizado por:\n\nAshley Baltodano\n";
+                    std::cout << "Proyecto realizado por:\n\n";
+                    std::cout << "Baltodano Solis Ashley Nayara\n";
+                    std::cout << "Sergio Amir Morales Vallejos\n";
+                    std::cout << "Yader Jose Rodriguez Benavidez\n\n";
                     std::cout << "Ingenieria en Computacion\n\n";
-                    std::cout << "Asignatura:\nProgramacion Grafica\n\nAnio: 2026\n\n";
+                    std::cout << "Asignatura:\nProgramacion Grafica\n\nAño: 2026\n\n";
                     std::cout << "=====================================\n";
                     std::cout << "Boton ATRAS o tecla M\n";
                     std::cout << "=====================================\n";
@@ -278,14 +312,12 @@ int main()
         if (currentState == MENU) mostrarCreditos = true;
     }
 
-    // CAMBIO Quirúrgico 3: Liberar texturas dinámicas al cerrar el juego
     TextureCall::eliminarSkyboxes();
-
     glfwTerminate();
     return 0;
 }
 
-// PROCESAR ENTRADAS ORIGINAL (Mantiene tus controles y colisiones del mouse intactas)
+// PROCESAR ENTRADAS
 void processInput(GLFWwindow* window, Camera& camera)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -295,10 +327,69 @@ void processInput(GLFWwindow* window, Camera& camera)
     {
         camera.Inputs(window);
 
-        // Control de teclado para interactuar con TextureCall y cambiar el clima en tiempo real
         if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) TextureCall::cambiarClima(DIA);
         if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) TextureCall::cambiarClima(TARDE);
         if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) TextureCall::cambiarClima(NOCHE);
+
+        // Colocar bloques dinámicamente en los tres ejes
+        // ==========================================
+// CÓDIGO EXISTENTE: COLOCAR BLOQUES (TECLA L)
+// ==========================================
+        static bool lPressedLastFrame = false;
+        if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS)
+        {
+            if (!lPressedLastFrame)
+            {
+                lPressedLastFrame = true;
+                glm::vec3 deFrente = camera.Position + (camera.Orientation * 2.5f);
+                glm::vec3 posicionBloque = glm::vec3(
+                    std::round(deFrente.x),
+                    std::round(deFrente.y),
+                    std::round(deFrente.z)
+                );
+                posicionesCubos.push_back(posicionBloque);
+            }
+        }
+        else
+        {
+            lPressedLastFrame = false;
+        }
+
+        // ==========================================
+        // NUEVO CÓDIGO: BORRAR BLOQUES (TECLA K)
+        // ==========================================
+        static bool kPressedLastFrame = false;
+        if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)
+        {
+            if (!kPressedLastFrame)
+            {
+                kPressedLastFrame = true;
+
+                // Calculamos el punto al que está mirando la cámara
+                glm::vec3 deFrente = camera.Position + (camera.Orientation * 2.5f);
+                glm::vec3 posicionObjetivo = glm::vec3(
+                    std::round(deFrente.x),
+                    std::round(deFrente.y),
+                    std::round(deFrente.z)
+                );
+
+                // Buscamos si existe un cubo en esa posición exacta para eliminarlo
+                for (auto it = posicionesCubos.begin(); it != posicionesCubos.end(); ++it)
+                {
+                    if (it->x == posicionObjetivo.x &&
+                        it->y == posicionObjetivo.y &&
+                        it->z == posicionObjetivo.z)
+                    {
+                        posicionesCubos.erase(it); // Elimina el cubo del vector
+                        break; // Salimos del bucle tras borrarlo
+                    }
+                }
+            }
+        }
+        else
+        {
+            kPressedLastFrame = false;
+        }
     }
 
     static bool mousePressedLastFrame = false;
@@ -320,15 +411,41 @@ void processInput(GLFWwindow* window, Camera& camera)
                 else if (botonCredits.estaPresionado(mouseX, mouseY))
                     currentState = CREDITS;
             }
-            else if (currentState == CONFIG || currentState == CREDITS)
+            else if (currentState == CONFIG || currentState == CREDITS || currentState == JUEGO)
             {
                 if (botonBack.estaPresionado(mouseX, mouseY))
-                    currentState = MENU;
-            }
-            else if (currentState == JUEGO)
-            {
-                if (botonBack.estaPresionado(mouseX, mouseY))
-                    currentState = MENU;
+                {
+                    if (currentState == JUEGO)
+                    {
+#ifdef _WIN32
+                        int respuesta = MessageBoxA(
+                            NULL,
+                            "¿Seguro que quieres volver al menu principal? Todo tu progreso y cubos creados se borraran.",
+                            "Advertencia - Creative Cubes 3D",
+                            MB_YESNO | MB_ICONWARNING | MB_TOPMOST
+                        );
+
+                        if (respuesta == IDYES)
+                        {
+                            posicionesCubos.clear();
+                            currentState = MENU;
+                            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                            camera.firstClick = true;
+                        }
+#else
+                        posicionesCubos.clear();
+                        currentState = MENU;
+                        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                        camera.firstClick = true;
+#endif
+                    }
+                    else
+                    {
+                        currentState = MENU;
+                        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                        camera.firstClick = true;
+                    }
+                }
             }
         }
     }
@@ -337,9 +454,29 @@ void processInput(GLFWwindow* window, Camera& camera)
         mousePressedLastFrame = false;
     }
 
-    if (currentState != MENU && glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS)
+    if (currentState == JUEGO && glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS)
     {
+#ifdef _WIN32
+        int respuesta = MessageBoxA(
+            NULL,
+            "¿Seguro que quieres volver al menu principal? Todo tu progreso y cubos creados se borraran.",
+            "Advertencia - Creative Cubes 3D",
+            MB_YESNO | MB_ICONWARNING | MB_TOPMOST
+        );
+
+        if (respuesta == IDYES)
+        {
+            posicionesCubos.clear();
+            currentState = MENU;
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            camera.firstClick = true;
+        }
+#else
+        posicionesCubos.clear();
         currentState = MENU;
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        camera.firstClick = true;
+#endif
     }
 }
 
@@ -410,4 +547,77 @@ unsigned int setupSkyboxCube() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
     return skyboxVAO;
+}
+
+// GENERAR CUBO TRIDIMENSIONAL
+unsigned int setupObjetoCubo() {
+    float vertices[] = {
+        // POSICIÓN (XYZ)      // NORMALES (XYZ)      // UV (ST)
+        // Cara Trasera
+        -0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,    0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,    1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,    1.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,    1.0f, 1.0f,
+        -0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,    0.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,    0.0f, 0.0f,
+
+        // Cara Frontal
+        -0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,    0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,    1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,    1.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,    1.0f, 1.0f,
+        -0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,    0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,    0.0f, 0.0f,
+
+        // Cara Izquierda
+        -0.5f,  0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,    1.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,    1.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,    0.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,    0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,    0.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,    1.0f, 0.0f,
+
+        // Cara Derecha
+         0.5f,  0.5f,  0.5f,   1.0f,  0.0f,  0.0f,    1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,   1.0f,  0.0f,  0.0f,    1.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,   1.0f,  0.0f,  0.0f,    0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,   1.0f,  0.0f,  0.0f,    0.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,   1.0f,  0.0f,  0.0f,    0.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,   1.0f,  0.0f,  0.0f,    1.0f, 0.0f,
+
+         // Cara Inferior
+        -0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,    0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,    1.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,    1.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,    1.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,    0.0f, 0.0f,
+        -0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,    0.0f, 1.0f,
+
+        // Cara Superior
+       -0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,    0.0f, 1.0f,
+        0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,    1.0f, 1.0f,
+        0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,    1.0f, 0.0f,
+        0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,    1.0f, 0.0f,
+       -0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,    0.0f, 0.0f,
+       -0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,    0.0f, 1.0f
+    };
+
+    unsigned int cubeVAO, cubeVBO;
+    glGenVertexArrays(1, &cubeVAO);
+    glGenBuffers(1, &cubeVBO);
+
+    glBindVertexArray(cubeVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    GLsizei stride = 8 * sizeof(float);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
+
+    return cubeVAO;
 }
