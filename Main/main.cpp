@@ -20,8 +20,8 @@
 #include <windows.h>
 #endif
 
-const unsigned int width = 960;
-const unsigned int height = 640;
+const unsigned int width = 1920;
+const unsigned int height = 1080;
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
