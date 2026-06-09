@@ -23,6 +23,13 @@
 const unsigned int width = 960;
 const unsigned int height = 640;
 
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
+    glViewport(0, 0, width, height);
+
+}
+
 int main()
 {
 #ifdef _WIN32
@@ -51,6 +58,7 @@ int main()
     }
 
     glfwMakeContextCurrent(window);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
@@ -107,6 +115,22 @@ int main()
     {
         {
             processInput(window, camera);
+
+            int currentWidth, currentHeight;
+            glfwGetFramebufferSize(window, &currentWidth, &currentHeight);
+
+
+            camera.width = currentWidth;
+            camera.height = currentHeight;
+
+            glm::mat4 projection2D = glm::ortho(
+                0.0f,
+                (float)currentWidth,
+                0.0f,
+                (float)currentHeight,
+                -1.0f,
+                1.0f
+            );
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             // ==================================================
@@ -122,7 +146,7 @@ int main()
                 glm::mat4 viewSkybox = glm::mat4(glm::mat3(camera.GetViewMatrix()));
                 glm::mat4 projMundo = glm::perspective(
                     glm::radians(45.0f),
-                    (float)width / (float)height,
+                    (float)currentWidth / (float)currentHeight,
                     0.1f,
                     100.0f
                 );
@@ -140,7 +164,7 @@ int main()
 
                 glm::mat4 projection = glm::perspective(
                     glm::radians(45.0f),
-                    (float)width / (float)height,
+                    (float)currentWidth / (float)currentHeight,
                     0.1f,
                     100.0f
                 );
@@ -183,44 +207,45 @@ int main()
 
                 menuShader.Activate();
 
+                glm::mat4 projectionMenu = glm::ortho(
+                    0.0f,
+                    960.0f,
+                    0.0f,
+                    640.0f,
+                    -1.0f,
+                    1.0f
+                );
+
                 if (currentState == MENU)
                 {
                     texFondoMenu.Bind();
 
                     glm::mat4 modelFondo = glm::translate(
                         glm::mat4(1.0f),
-                        glm::vec3(
-                            (float)width / 2.0f,
-                            (float)height / 2.0f,
-                            0.0f
-                        )
+                        glm::vec3(480.0f, 320.0f, 0.0f)
                     );
 
                     modelFondo = glm::scale(
                         modelFondo,
-                        glm::vec3(
-                            (float)width / 2.0f,
-                            (float)height / 2.0f,
-                            1.0f
-                        )
+                        glm::vec3(480.0f, 320.0f, 1.0f)
                     );
 
                     menuShader.setMat4(
                         "model2D",
-                        projection2D * modelFondo
+                        projectionMenu * modelFondo
                     );
 
                     glBindVertexArray(menuQuadVAO);
                     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
                     texBotonIniciar.Bind();
-                    renderBoton(menuShader, menuQuadVAO, botonJugar, projection2D);
+                    renderBoton(menuShader, menuQuadVAO, botonJugar, projectionMenu);
 
                     texBotonReglas.Bind();
-                    renderBoton(menuShader, menuQuadVAO, botonConfig, projection2D);
+                    renderBoton(menuShader, menuQuadVAO, botonConfig, projectionMenu);
 
                     texBotonCreditos.Bind();
-                    renderBoton(menuShader, menuQuadVAO, botonCredits, projection2D);
+                    renderBoton(menuShader, menuQuadVAO, botonCredits, projectionMenu);
                 }
                 else if (currentState == CONFIG)
                 {
@@ -228,32 +253,24 @@ int main()
 
                     glm::mat4 modelConfig = glm::translate(
                         glm::mat4(1.0f),
-                        glm::vec3(
-                            (float)width / 2.0f,
-                            (float)height / 2.0f,
-                            0.0f
-                        )
+                        glm::vec3(480.0f, 320.0f, 0.0f)
                     );
 
                     modelConfig = glm::scale(
                         modelConfig,
-                        glm::vec3(
-                            (float)width / 2.0f,
-                            (float)height / 2.0f,
-                            1.0f
-                        )
+                        glm::vec3(480.0f, 320.0f, 0.0f)
                     );
 
                     menuShader.setMat4(
                         "model2D",
-                        projection2D * modelConfig
+                        projectionMenu * modelConfig
                     );
 
                     glBindVertexArray(menuQuadVAO);
                     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
                     texBotonBack.Bind();
-                    renderBoton(menuShader, menuQuadVAO, botonBack, projection2D);
+                    renderBoton(menuShader, menuQuadVAO, botonBack, projectionMenu);
                 }
                 else if (currentState == CREDITS)
                 {
@@ -261,25 +278,17 @@ int main()
 
                     glm::mat4 modelCredits = glm::translate(
                         glm::mat4(1.0f),
-                        glm::vec3(
-                            (float)width / 2.0f,
-                            (float)height / 2.0f,
-                            0.0f
-                        )
+                        glm::vec3(480.0f, 320.0f, 0.0f)
                     );
 
                     modelCredits = glm::scale(
                         modelCredits,
-                        glm::vec3(
-                            (float)width / 2.0f,
-                            (float)height / 2.0f,
-                            1.0f
-                        )
+                        glm::vec3(480.0f, 320.0f, 0.0f)
                     );
 
                     menuShader.setMat4(
                         "model2D",
-                        projection2D * modelCredits
+                        projectionMenu * modelCredits
                     );
 
                     glBindVertexArray(menuQuadVAO);
@@ -305,7 +314,7 @@ int main()
                     }
 
                     texBotonBack.Bind();
-                    renderBoton(menuShader, menuQuadVAO, botonBack, projection2D);
+                    renderBoton(menuShader, menuQuadVAO, botonBack, projectionMenu);
                 }
 
                 glEnable(GL_DEPTH_TEST);
