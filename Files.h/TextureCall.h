@@ -18,8 +18,6 @@
 #include "Texture.h"
 #include "Camera.h"
 
-// NOTA: Quitamos AppState, SkyboxType y Boton2D de aquí porque YA existen en tu main.cpp
-// Solo dejamos las declaraciones que usará la estructura.
 enum SkyboxType { DIA, TARDE, NOCHE };
 
 struct TextureCall {
