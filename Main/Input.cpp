@@ -13,19 +13,16 @@ void processInput(GLFWwindow* window, Camera& camera)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    // Tecla 1 = Día
     if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
     {
         TextureCall::cambiarClima(DIA);
     }
 
-    // Tecla 2 = Tarde
     if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
     {
         TextureCall::cambiarClima(TARDE);
     }
 
-    // Tecla 3 = Noche
     if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
     {
         TextureCall::cambiarClima(NOCHE);
@@ -33,12 +30,8 @@ void processInput(GLFWwindow* window, Camera& camera)
 
     if (currentState == JUEGO)
     {
-        // Movimiento WASD + cámara con mouse
         camera.Inputs(window);
 
-        // ==========================================
-        // CÓDIGO EXISTENTE: COLOCAR BLOQUES (TECLA L)
-        // ==========================================
         static bool lPressedLastFrame = false;
 
         if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS)
@@ -64,9 +57,6 @@ void processInput(GLFWwindow* window, Camera& camera)
             lPressedLastFrame = false;
         }
 
-        // ==========================================
-        // BORRAR BLOQUES (TECLA K)
-        // ==========================================
         static bool kPressedLastFrame = false;
 
         if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)
@@ -112,7 +102,18 @@ void processInput(GLFWwindow* window, Camera& camera)
             mousePressedLastFrame = true;
             double mouseX, mouseY;
             glfwGetCursorPos(window, &mouseX, &mouseY);
-            mouseY = camera.height - mouseY;
+
+            if (currentState == JUEGO)
+            {
+                mouseY = camera.height - mouseY;
+            }
+            else
+            {
+                float virtualX = (float)mouseX * (960.0f / (float)camera.width);
+                float virtualY = ((float)camera.height - (float)mouseY) * (640.0f / (float)camera.height);
+                mouseX = virtualX;
+                mouseY = virtualY;
+            }
 
             if (currentState == MENU)
             {
