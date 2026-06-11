@@ -1,9 +1,9 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
+#include <glm.hpp>
+#include <gtc/matrix_transform.hpp>
+#include <gtc/type_ptr.hpp>
 
 #include <iostream>
 
@@ -15,6 +15,9 @@
 #include "Globals.h"
 #include "Utils.h"
 #include "Input.h"
+
+// Tu controlador de audio
+#include "AudioPlayer.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -110,6 +113,14 @@ int main()
     );
 
     bool mostrarCreditos = true;
+
+    // ==================================================
+    // INICIO DE LA MÚSICA DE FONDO GLOBAL
+    // ==================================================
+    AudioController musicaFondo;
+
+    musicaFondo.ReproducirPista("C:\\Users\\yader\\source\\repos\\Models\\Models\\Schermopnamenn\\musicadabuti.wav");
+    
 
     while (!glfwWindowShouldClose(window))
     {
@@ -327,6 +338,7 @@ int main()
                 mostrarCreditos = true;
         }
     }
+    musicaFondo.DetenerTodo();
 
     TextureCall::eliminarSkyboxes();
 
