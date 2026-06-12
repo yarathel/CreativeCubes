@@ -5,7 +5,7 @@ AppState currentState = MENU;
 Boton2D botonJugar =
 {
     355.0f,
-    420.0f,
+    330.0f,
     250.0f,
     150.0f
 };
@@ -13,7 +13,7 @@ Boton2D botonJugar =
 Boton2D botonConfig =
 {
     355.0f,
-    280.0f,
+    200.0f,
     250.0f,
     160.0f
 };
@@ -21,7 +21,7 @@ Boton2D botonConfig =
 Boton2D botonCredits =
 {
     355.0f,
-    150.0f,
+    80.0f,
     250.0f,
     150.0f
 };
@@ -44,3 +44,4 @@ bool Boton2D::estaPresionado(double mouseX, double mouseY)
         mouseY >= y &&
         mouseY <= y + alto
     );
+}
