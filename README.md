@@ -2,12 +2,12 @@
 
 CreativeCubes is an interactive OpenGL application built in C++, designed to let kids and beginners create 3D models using simple geometric blocks. The goal is to encourage creativity, spatial reasoning, and learning of basic graphics programming concepts through an intuitive visual interface.
 
-Users can place, move, rotate, and combine cubes, rectangular prisms, pyramids, and spheres to build their own structures or attempt to recreate a target model such as a house, tower, or simple robot.
+Users can place, move, and combine cubes, pyramids,to build their own structures or attempt to recreate a target model such as a house, tower, or simple robot.
 
 --This project introduces users to:
 
 Handling objects in 3D space
-Transformations (translation, rotation, scaling)
+Transformations (translation, rotation)
 Depth and perspective concepts
 Real-time rendering
 Practical use of mathematical and graphical concepts
@@ -49,9 +49,8 @@ Git & GitHub
 Users can build using:
 
 -Cubes
--Rectangular prisms
--Pyramids
--Spheres
+-pyramids
+
 
 --Project Status & Planning
 
