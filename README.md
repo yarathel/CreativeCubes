@@ -64,5 +64,4 @@ Free 3D camera
 
 The level system (building predefined goal structures) is the most challenging part and will be implemented if time allows.
 
-Creative Cube
-Creative Cube
+CreativeCubes
