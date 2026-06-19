@@ -67,6 +67,7 @@ Link to the video of our project
 https://youtu.be/flG1dy7SiZ8
 
 How to clone your Creative Cubes project:
+
 Step 1: First, you must have Git installed, as this is necessary to clone the project.
 
 Step 2: Select the folder where you will clone it, or you can create a new one and specify it.
