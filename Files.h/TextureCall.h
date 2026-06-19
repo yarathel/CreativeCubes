@@ -2,14 +2,13 @@
 #include <stb_image.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp> // Añadido para glm::value_ptr en el Skybox
+#include <glm/gtc/type_ptr.hpp> 
 #include <iostream>
 #pragma once
 #ifndef TEXTURE_CALL_H
 #define TEXTURE_CALL_H
 
-#include <stb/stb_image.h> // <--- CRUCIAL: Añadido para stbi_load y corregir errores
-
+#include <stb/stb_image.h> 
 #include <string>
 #include <vector>
 #include <cmath>
