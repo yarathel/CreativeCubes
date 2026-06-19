@@ -1,8 +1,6 @@
 #ifndef CAMERA_CLASS_H
 #define CAMERA_CLASS_H
 
-
-#define GLM_ENABLE_EXPERIMENTAL
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -28,8 +26,9 @@ public:
     float sensitivity = 100.0f;
 
     float velocityY = 0.0f;
-    const float GRAVITY = -9.81f;
-    const float JUMP_FORCE = 4.2f;
+    const float GRAVITY = -18.0f;          
+    const float JUMP_FORCE = 6.5f;         
+    const float MAX_FALL_SPEED = -12.0f;   
     bool isGrounded = false;
     glm::vec3 cameraSize = glm::vec3(0.5f, 1.8f, 0.5f);
 
