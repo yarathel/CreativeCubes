@@ -1,23 +1,21 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
 #include <iostream>
-
+#include <vector>
+#include <cmath>
 #include "Shader.h"
 #include "Camera.h"
 #include "Texture.h"
 #include "TextureCall.h"
-
 #include "Globals.h"
 #include "Utils.h"
 #include "Input.h"
 #include "Loading.h"
 #include "AudioPlayer.h"
-
+#include <fstream>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -28,6 +26,60 @@ const unsigned int height = 640;
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
+}
+
+// ============================================================================
+// NUEVA FUNCIÓN: RAYCASTING MINECRAFT STYLE PARA EL CURSOR GUÍA
+// ============================================================================
+glm::vec3 CalcularPosicionGuia(Camera& camera, const std::vector<glm::vec3>& cubos)
+{
+    float maxDistancia = 6.0f;   // Qué tan lejos puedes poner un cubo (en metros/unidades)
+    float paso = 0.02f;          // Alta precisión para que el rayo no se salte esquinas
+
+    glm::vec3 rayoOrigen = camera.Position;
+    glm::vec3 rayoDireccion = camera.Orientation; // Vector dirección ya normalizado en tu cámara
+
+    // Avanzamos el rayo gradualmente hacia adelante
+    for (float dist = 0.0f; dist < maxDistancia; dist += paso)
+    {
+        glm::vec3 puntoActual = rayoOrigen + (rayoDireccion * dist);
+
+        // 1. Verificar si chocó con un cubo existente en el mundo
+        for (const auto& cuboPos : cubos)
+        {
+            // Verificamos si el punto del rayo está dentro de los límites AABB del cubo (0.5 de radio)
+            if (puntoActual.x >= cuboPos.x - 0.5f && puntoActual.x <= cuboPos.x + 0.5f &&
+                puntoActual.y >= cuboPos.y - 0.5f && puntoActual.y <= cuboPos.y + 0.5f &&
+                puntoActual.z >= cuboPos.z - 0.5f && puntoActual.z <= cuboPos.z + 0.5f)
+            {
+                // Averiguar en qué cara del cubo impactó el rayo para sugerir la nueva posición adyacente
+                glm::vec3 offset = puntoActual - cuboPos;
+                glm::vec3 absOffset = glm::abs(offset);
+                glm::vec3 resultado = cuboPos;
+
+                if (absOffset.x > absOffset.y && absOffset.x > absOffset.z)
+                    resultado.x += (offset.x > 0) ? 1.0f : -1.0f;
+                else if (absOffset.y > absOffset.x && absOffset.y > absOffset.z)
+                    resultado.y += (offset.y > 0) ? 1.0f : -1.0f;
+                else
+                    resultado.z += (offset.z > 0) ? 1.0f : -1.0f;
+
+                return resultado; // Retorna la posición de la rejilla al lado de la cara impactada
+            }
+        }
+
+        // 2. Verificar si chocó con el plano del suelo base del mapa (Y = 0)
+        // Dado que tus cubos miden 1.0f de altura total, su centro en el suelo queda en Y = 0.5f
+        if (puntoActual.y <= 0.5f)
+        {
+            // Redondeamos perfectamente a la cuadrícula entera
+            return glm::vec3(std::round(puntoActual.x), 0.5f, std::round(puntoActual.z));
+        }
+    }
+
+    // Si estás mirando al vacío en el aire, te muestra la guía a la distancia máxima en rejilla entera
+    glm::vec3 puntoAire = rayoOrigen + (rayoDireccion * 4.0f);
+    return glm::vec3(std::round(puntoAire.x), std::round(puntoAire.y), std::round(puntoAire.z));
 }
 
 int main()
@@ -103,23 +155,25 @@ int main()
     Texture PantallaConfig("pantallaReglas.png", "2D", 0);
     Texture texPantallaCreditos("pantallaCreditos.png", "2D", 0);
     Texture texCuboMundo("ladrillo.jpg", "2D", 0);
-
-    // Textura con el letrero "LOADING"
+    Texture texBotonResume("Resume.png", "2D", 0);
+    Texture texBotonRules("rules_menu.png", "2D", 0);
+    Texture texBotonMainMenu("MainMenu.png", "2D", 0);
+    Texture texTituloPausa("titulo_paused.png", "2D", 0);
     Texture texLoadingText("loading.png", "2D", 0);
+    Texture texBotonSalir("exit.png", "2D", 0);
 
     TextureCall::inicializarSkyboxes();
 
     cubeShader.Activate();
     glUniform1i(glGetUniformLocation(cubeShader.ID, "texture_diffuse1"), 0);
 
-    // Renderiza la animación completa por 8s segundos
     Loading::Render(window, cubeShader, cubeVAO, texCuboMundo, menuShader, fondoVAO, texLoadingText, 8.0f);
 
     bool mostrarCreditos = true;
+    static bool clickDerechoPresionado = false; // Flag para controlar que solo ponga un cubo por click
 
     AudioController musicaFondo;
-
-    musicaFondo.ReproducirPista("C:\\Users\\USUARIO\\source\\repos\\Proyecto_PG\\Proyecto_PG\\musicadabuti.wav");
+    musicaFondo.ReproducirPista("musicadabuti.wav");
 
     while (!glfwWindowShouldClose(window))
     {
@@ -134,7 +188,7 @@ int main()
         glm::mat4 projection2D = glm::ortho(0.0f, (float)currentWidth, 0.0f, (float)currentHeight, -1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (currentState == JUEGO)
+        if (currentState == JUEGO || currentState == PAUSA)
         {
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LEQUAL);
@@ -151,6 +205,29 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, 36);
             glDepthFunc(GL_LESS);
 
+            // ============================================================================
+            // INTERCEPCIÓN DEL CURSOR GUÍA Y ENTRADA DE CLICKS
+            // ============================================================================
+            glm::vec3 posGuia = CalcularPosicionGuia(camera, posicionesCubos);
+
+            if (currentState == JUEGO)
+            {
+                // Clic Derecho para colocar un nuevo cubo en la posición sugerida por la guía
+                if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+                {
+                    if (!clickDerechoPresionado)
+                    {
+                        posicionesCubos.push_back(posGuia);
+                        clickDerechoPresionado = true;
+                    }
+                }
+                else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_RELEASE)
+                {
+                    clickDerechoPresionado = false;
+                }
+            }
+
+            // Renderizado de bloques normales
             cubeShader.Activate();
             glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)currentWidth / (float)currentHeight, 0.1f, 100.0f);
             glm::mat4 view = camera.GetViewMatrix();
@@ -160,6 +237,9 @@ int main()
             texCuboMundo.Bind();
             glBindVertexArray(cubeVAO);
 
+            // Pasamos alpha = 1.0f para los cubos normales del mapa
+            glUniform1f(glGetUniformLocation(cubeShader.ID, "alpha"), 1.0f);
+
             for (size_t i = 0; i < posicionesCubos.size(); i++)
             {
                 glm::mat4 modelCubo = glm::translate(glm::mat4(1.0f), posicionesCubos[i]);
@@ -167,13 +247,49 @@ int main()
                 glDrawArrays(GL_TRIANGLES, 0, 36);
             }
 
+            // ============================================================================
+            // RENDERIZADO DEL CUBO FANTASMA (CURSOR GUÍA)
+            // ============================================================================
+            if (currentState == JUEGO)
+            {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+                glm::mat4 modelGuia = glm::translate(glm::mat4(1.0f), posGuia);
+                // Escalamos un milímetro (1.005f) para evitar parpadeos de textura (Z-fighting) con las caras adyacentes
+                modelGuia = glm::scale(modelGuia, glm::vec3(1.005f));
+                cubeShader.setMat4("model", modelGuia);
+
+                // Pasamos alpha = 0.4f a default.frag para que se renderice translúcido
+                glUniform1f(glGetUniformLocation(cubeShader.ID, "alpha"), 0.4f);
+
+                glDrawArrays(GL_TRIANGLES, 0, 36);
+                glDisable(GL_BLEND);
+            }
+
+            // --- RENDERIZADO DE LA INTERFAZ 2D ENCIMA DEL MUNDO ---
             glDisable(GL_DEPTH_TEST);
             menuShader.Activate();
-            texBotonBack.Bind();
-            renderBoton(menuShader, menuQuadVAO, botonBack, projection2D);
+
+            if (currentState == PAUSA)
+            {
+                glm::mat4 projectionMenuVirtual = glm::ortho(0.0f, 960.0f, 0.0f, 640.0f, -1.0f, 1.0f);
+
+                texTituloPausa.Bind();
+                renderBoton(menuShader, menuQuadVAO, tituloPausa, projectionMenuVirtual);
+
+                texBotonResume.Bind();
+                renderBoton(menuShader, menuQuadVAO, botonResume, projectionMenuVirtual);
+
+                texBotonRules.Bind();
+                renderBoton(menuShader, menuQuadVAO, botonRules, projectionMenuVirtual);
+
+                texBotonMainMenu.Bind();
+                renderBoton(menuShader, menuQuadVAO, botonMainMenu, projectionMenuVirtual);
+            }
             glEnable(GL_DEPTH_TEST);
         }
-        else
+        else // MENU, CONFIG O CREDITS
         {
             glDisable(GL_DEPTH_TEST);
             menuShader.Activate();
@@ -195,6 +311,9 @@ int main()
 
                 texBotonCreditos.Bind();
                 renderBoton(menuShader, menuQuadVAO, botonCredits, projectionMenuVirtual);
+
+                texBotonSalir.Bind();
+                renderBoton(menuShader, menuQuadVAO, botonSalir, projectionMenuVirtual);
             }
             else if (currentState == CONFIG)
             {
