@@ -49,8 +49,6 @@ Git & GitHub
 Users can build using:
 
 -Cubes
--pyramids
-
 
 --Project Status & Planning
 
