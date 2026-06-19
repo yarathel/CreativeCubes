@@ -62,4 +62,20 @@ Free 3D camera
 
 The level system (building predefined goal structures) is the most challenging part and will be implemented if time allows.
 
-CreativeCubes
+
+Link to the video of our project
+https://youtu.be/flG1dy7SiZ8
+
+How to clone your Creative Cubes project:
+Step 1: First, you must have Git installed, as this is necessary to clone the project.
+
+Step 2: Select the folder where you will clone it, or you can create a new one and specify it.
+
+Step 3: In Git, paste the `https` command you copied from our repository (https://github.com/yarathel/CreativeCubes.git) and then press Enter.
+
+Step 4: Type `cd CreativeCubes` to access the project folder.
+
+Step 5: Type the `ls` command to check if the files were downloaded.
+
+Step 6: To open it, if you are using Visual Studio Community, go to the CreativeCubes.sln folder. This will open Visual Studio Community. Then click Build.
+
