@@ -3,7 +3,7 @@
 #include <cmath>    
 #include <algorithm>
 
-// CORRECCIÓN: Declaramos externamente el vector global para que Camera.cpp sepa que existe en main.cpp
+// Declaramos externamente el vector global para que Camera.cpp sepa que existe en main.cpp
 extern std::vector<glm::vec3> posicionesCubos;
 
 // Constructor de la Cámara
@@ -31,25 +31,36 @@ void Camera::Inputs(GLFWwindow* window)
     if (deltaTime > 0.1f) deltaTime = 0.1f; // Filtro para evitar saltos en tirones de FPS
 
     float currentSpeed = speed * deltaTime;
-    glm::vec3 nextPosition = Position;
 
-    // 2. OBTENER DIRECCIONES SÓLO EN EL PLANO HORIZONTALES (XZ)
+    // 2. OBTENER DIRECCIONES HORIZONTALES (XZ)
     glm::vec3 forwardHorizontal = glm::normalize(glm::vec3(Orientation.x, 0.0f, Orientation.z));
     glm::vec3 rightHorizontal = glm::normalize(glm::cross(forwardHorizontal, Up));
 
+    glm::vec3 movimientoHorizontal(0.0f);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        nextPosition += currentSpeed * forwardHorizontal;
+        movimientoHorizontal += forwardHorizontal;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        nextPosition -= currentSpeed * forwardHorizontal;
+        movimientoHorizontal -= forwardHorizontal;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        nextPosition -= currentSpeed * rightHorizontal;
+        movimientoHorizontal -= rightHorizontal;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        nextPosition += currentSpeed * rightHorizontal;
+        movimientoHorizontal += rightHorizontal;
 
-    // 3. CÁLCULO DE GRAVEDAD Y ACCIÓN DE SALTO
+    if (glm::length(movimientoHorizontal) > 0.0f)
+    {
+        movimientoHorizontal = glm::normalize(movimientoHorizontal) * currentSpeed;
+    }
+
+    // 3. CÁLCULO DE GRAVEDAD Y SALTO (Usa el MAX_FALL_SPEED que corregiste en el .h)
     if (!isGrounded)
     {
         velocityY += GRAVITY * deltaTime;
+
+        // Ahora que MAX_FALL_SPEED es -12.0f, te dejará caer con aceleración real
+        if (velocityY < MAX_FALL_SPEED)
+        {
+            velocityY = MAX_FALL_SPEED;
+        }
     }
     else
     {
@@ -63,31 +74,33 @@ void Camera::Inputs(GLFWwindow* window)
         }
     }
 
-    nextPosition.y += velocityY * deltaTime;
+    // Usamos una variable temporal limpia para recalcular este frame de manera controlada
+    glm::vec3 nextPosition = Position;
 
-    // 4. LÍMITE DE SUELO POR DEFECTO (Y = 1.8f para ojos del jugador al nivel cero)
+    // Dimensiones de cajas AABB
+    float cubeHalfSize = 0.5f;
+    float camHalfWidth = cameraSize.x / 2.0f;
+    float camHalfDepth = cameraSize.z / 2.0f;
+
+    // ============================================================================
+    // PASO A: APLICAR Y RESOLVER MOVIMIENTO VERTICAL (EJE Y)
+    // ============================================================================
+    nextPosition.y += velocityY * deltaTime;
+    isGrounded = false;
+
+    // Suelo base del mapa (Nivel cero)
     if (nextPosition.y <= 1.8f)
     {
         nextPosition.y = 1.8f;
         velocityY = 0.0f;
         isGrounded = true;
     }
-    else
-    {
-        isGrounded = false;
-    }
 
-    // 5. EVALUACIÓN DE COLISIONES AABB
-    float cubeHalfSize = 0.5f;
-    float camHalfWidth = cameraSize.x / 2.0f;
-    float camHalfDepth = cameraSize.z / 2.0f;
-
-    // Evaluar colisiones con cada cubo del escenario
+    // Colisiones en Y contra bloques
     for (size_t i = 0; i < posicionesCubos.size(); i++)
     {
         glm::vec3 cuboPos = posicionesCubos[i];
 
-        // Caja del cubo actual
         float minCuboX = cuboPos.x - cubeHalfSize;
         float maxCuboX = cuboPos.x + cubeHalfSize;
         float minCuboY = cuboPos.y - cubeHalfSize;
@@ -95,59 +108,84 @@ void Camera::Inputs(GLFWwindow* window)
         float minCuboZ = cuboPos.z - cubeHalfSize;
         float maxCuboZ = cuboPos.z + cubeHalfSize;
 
-        // Caja de la cámara
         float minCamX = nextPosition.x - camHalfWidth;
         float maxCamX = nextPosition.x + camHalfWidth;
-        float minCamY = nextPosition.y - cameraSize.y; // Base de los pies (Suelo)
-        float maxCamY = nextPosition.y;               // Altura de los ojos (Techo)
-
-        // CORRECCIÓN: Definición de límites Z de la cámara faltantes
+        float minCamY = nextPosition.y - cameraSize.y; // Pies del jugador
+        float maxCamY = nextPosition.y;               // Ojos/Cabeza del jugador
         float minCamZ = nextPosition.z - camHalfDepth;
         float maxCamZ = nextPosition.z + camHalfDepth;
 
-        // Verificar intersección tridimensional
-        bool colisionX = maxCamX > minCuboX && minCamX < maxCuboX;
-        bool colisionY = maxCamY > minCuboY && minCamY < maxCamY;
-        bool colisionZ = maxCamZ > minCuboZ && minCamZ < maxCuboZ;
-
-        if (colisionX && colisionY && colisionZ)
+        if (maxCamX > minCuboX && minCamX < maxCuboX &&
+            maxCamY > minCuboY && minCamY < maxCamY &&
+            maxCamZ > minCuboZ && minCamZ < maxCuboZ)
         {
-            // Medir profundidad de colisión en cada eje
+            // Caso 1: Vienes cayendo o estás apoyado en la mitad superior del cubo
+            if (velocityY <= 0.0f && minCamY >= minCuboY)
+            {
+                nextPosition.y = maxCuboY + cameraSize.y;
+                velocityY = 0.0f;
+                isGrounded = true;
+            }
+            // Caso 2: Vas subiendo con fuerza positiva y tu cabeza golpea la base inferior del cubo
+            else if (velocityY > 0.0f && maxCamY < (maxCuboY - 0.1f))
+            {
+                nextPosition.y = minCuboY;
+                velocityY = 0.0f;
+            }
+        }
+    }
+
+    // ============================================================================
+    // PASO B: APLICAR Y RESOLVER MOVIMIENTO HORIZONTAL (EJES X / Z)
+    // ============================================================================
+    nextPosition.x += movimientoHorizontal.x;
+    nextPosition.z += movimientoHorizontal.z;
+
+    for (size_t i = 0; i < posicionesCubos.size(); i++)
+    {
+        glm::vec3 cuboPos = posicionesCubos[i];
+
+        float minCuboX = cuboPos.x - cubeHalfSize;
+        float maxCuboX = cuboPos.x + cubeHalfSize;
+        float minCuboY = cuboPos.y - cubeHalfSize;
+        float maxCuboY = cuboPos.y + cubeHalfSize;
+        float minCuboZ = cuboPos.z - cubeHalfSize;
+        float maxCuboZ = cuboPos.z + cubeHalfSize;
+
+        float minCamX = nextPosition.x - camHalfWidth;
+        float maxCamX = nextPosition.x + camHalfWidth;
+        float minCamY = nextPosition.y - cameraSize.y;
+        float maxCamY = nextPosition.y;
+        float minCamZ = nextPosition.z - camHalfDepth;
+        float maxCamZ = nextPosition.z + camHalfDepth;
+
+        if (maxCamX > minCuboX && minCamX < maxCuboX &&
+            maxCamY > minCuboY && minCamY < maxCamY &&
+            maxCamZ > minCuboZ && minCamZ < maxCuboZ)
+        {
+            // Tolerancia de escalón
+            if (minCamY >= (maxCuboY - 0.1f))
+            {
+                continue;
+            }
+
             float overlapX = std::min(maxCamX - minCuboX, maxCuboX - minCamX);
-            float overlapY = std::min(maxCamY - minCuboY, maxCuboY - minCamY);
             float overlapZ = std::min(maxCamZ - minCuboZ, maxCuboZ - minCamZ);
 
-            // Resolver colisión en el eje de menor penetración
-            if (overlapY < overlapX && overlapY < overlapZ)
+            if (overlapX < overlapZ)
             {
-                if (Position.y - cameraSize.y >= maxCuboY - 0.05f) // Caída sobre el bloque
-                {
-                    nextPosition.y = maxCuboY + cameraSize.y;
-                    velocityY = 0.0f;
-                    isGrounded = true;
-                }
-                else if (Position.y <= minCuboY + 0.05f) // Colisión desde abajo hacia el bloque
-                {
-                    nextPosition.y = minCuboY;
-                    if (velocityY > 0.0f) velocityY = 0.0f;
-                }
-            }
-            else if (overlapX < overlapZ)
-            {
-                // Colisión lateral en eje X
-                if (Position.x < cuboPos.x) nextPosition.x -= overlapX;
+                if (nextPosition.x < cuboPos.x) nextPosition.x -= overlapX;
                 else nextPosition.x += overlapX;
             }
             else
             {
-                // Colisión lateral en eje Z
-                if (Position.z < cuboPos.z) nextPosition.z -= overlapZ;
+                if (nextPosition.z < cuboPos.z) nextPosition.z -= overlapZ;
                 else nextPosition.z += overlapZ;
             }
         }
     }
 
-    // Guardar posición física aprobada
+    // Guardamos la posición corregida final en la variable del objeto
     Position = nextPosition;
 
     // 6. RENDERIZACIÓN Y ORIENTACIÓN MEDIANTE EL RATÓN
@@ -161,8 +199,7 @@ void Camera::Inputs(GLFWwindow* window)
             firstClick = false;
         }
 
-        double mouseX;
-        double mouseY;
+        double mouseX, mouseY;
         glfwGetCursorPos(window, &mouseX, &mouseY);
 
         float rotX = sensitivity * (float)(mouseY - (height / 2)) / height;
