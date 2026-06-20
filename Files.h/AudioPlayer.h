@@ -60,4 +60,4 @@ private:
     std::string archivoActual;
     bool estaEncendido;
 };
-
+#endif
