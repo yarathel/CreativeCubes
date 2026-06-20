@@ -80,3 +80,14 @@ Step 5: Type the `ls` command to check if the files were downloaded.
 
 Step 6: To open it, if you are using Visual Studio Community, go to the CreativeCubes.sln folder. This will open Visual Studio Community. Then click Build.
 
+Minimum Requirements to Run:
+
+Component	                            Minimum
+Operating System	                  Windows 10/11 64-bit
+Processor	                          Intel Core i5/i7 1th generation or higher / Ryzen 5 5600+
+RAM	                                4GB
+Free Storage Space	                500 MB - 2 GB
+Graphics Card	                      Intel HD Graphics 4000 or higher
+OpenGL	                            OpenGL 3.3+
+Audio	                              Basic sound card
+
